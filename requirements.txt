@@ -1,0 +1,4 @@
+pygame==2.1.0
+sounddevice==0.4.3
+wavio==0.0.4
+tk
