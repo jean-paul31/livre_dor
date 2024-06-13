@@ -5,15 +5,17 @@ import threading
 import time
 from PIL import Image, ImageTk
 import os
+import numpy as np
 
 textes = {
     "instructions": (
         "Instructions d'utilisation :\n"
         "1. Entrez un nom pour le fichier audio dans le champ de saisie.\n"
-        "2. Cliquez sur 'Commencer l'enregistrement' pour démarrer l'enregistrement audio.\n"
-        "3. Cliquez sur 'Arrêter l'enregistrement' pour terminer l'enregistrement avant la fin des 3 minutes.\n"
-        "4. L'enregistrement sera automatiquement sauvegardé sous le nom que vous avez saisi.\n"
-        "5. Le compte à rebours de 3 minutes s'affichera pendant l'enregistrement.\n"
+        "2. Décrocher le combiné.\n"
+        "3. Cliquez sur 'Commencer l'enregistrement' pour démarrer l'enregistrement audio.\n"
+        "4. Cliquez sur 'Arrêter l'enregistrement' pour terminer l'enregistrement avant la fin des 3 minutes.\n"
+        "5. L'enregistrement sera automatiquement sauvegardé sous le nom que vous avez saisi.\n"
+        "6. Le compte à rebours de 3 minutes s'affichera pendant l'enregistrement.\n"
     ),
     "commencer": "Commencer l'enregistrement",
     "arreter": "Arrêter l'enregistrement",
@@ -22,7 +24,7 @@ textes = {
     "resultat": "Vous avez saisi :",
     "timer_format": "{:02d}:{:02d}",
     "francais": "Français",
-    "portugais": "Portugais",
+    "portugais": "Português",
 }
 
 def traduire_en_francais():
@@ -31,10 +33,11 @@ def traduire_en_francais():
         "instructions": (
             "Instructions d'utilisation :\n"
             "1. Entrez un nom pour le fichier audio dans le champ de saisie.\n"
-            "2. Cliquez sur 'Commencer l'enregistrement' pour démarrer l'enregistrement audio.\n"
-            "3. Cliquez sur 'Arrêter l'enregistrement' pour terminer l'enregistrement avant la fin des 3 minutes.\n"
-            "4. L'enregistrement sera automatiquement sauvegardé sous le nom que vous avez saisi.\n"
-            "5. Le compte à rebours de 3 minutes s'affichera pendant l'enregistrement.\n"
+            "2. Décrocher le combiné.\n"
+            "3. Cliquez sur 'Commencer l'enregistrement' pour démarrer l'enregistrement audio.\n"
+            "4. Cliquez sur 'Arrêter l'enregistrement' pour terminer l'enregistrement avant la fin des 3 minutes.\n"
+            "5. L'enregistrement sera automatiquement sauvegardé sous le nom que vous avez saisi.\n"
+            "6. Le compte à rebours de 3 minutes s'affichera pendant l'enregistrement.\n"
         ),
         "commencer": "Commencer l'enregistrement",
         "arreter": "Arrêter l'enregistrement",
@@ -43,7 +46,7 @@ def traduire_en_francais():
         "resultat": "Vous avez saisi :",
         "timer_format": "{:02d}:{:02d}",
         "francais": "Français",
-        "portugais": "Portugais",
+        "portugais": "Portugês",
     }
     mettre_a_jour_interface()
 
@@ -53,10 +56,11 @@ def traduire_en_portugais():
         "instructions": (
             "Instruções de uso:\n"
             "1. Digite um nome para o arquivo de áudio no campo de entrada.\n"
-            "2. Clique em 'Iniciar gravação' para começar a gravação de áudio.\n"
-            "3. Clique em 'Parar gravação' para terminar a gravação antes do fim dos 3 minutos.\n"
-            "4. A gravação será automaticamente salva com o nome que você digitou.\n"
-            "5. A contagem regressiva de 3 minutos aparecerá durante a gravação.\n"
+            "2. Levante o fone do gancho.\n"
+            "3. Clique em 'Iniciar gravação' para começar a gravação de áudio.\n"
+            "4. Clique em 'Parar gravação' para terminar a gravação antes do fim dos 3 minutos.\n"
+            "5. A gravação será automaticamente salva com o nome que você digitou.\n"
+            "6. A contagem regressiva de 3 minutos aparecerá durante a gravação.\n"
         ),
         "commencer": "Iniciar gravação",
         "arreter": "Parar gravação",
@@ -65,7 +69,7 @@ def traduire_en_portugais():
         "resultat": "Você digitou:",
         "timer_format": "{:02d}:{:02d}",
         "francais": "Francês",
-        "portugais": "Português",
+        "portugais": "Portugês",
     }
     mettre_a_jour_interface()
 
@@ -77,8 +81,14 @@ def mettre_a_jour_interface():
     label_resultat.config(text=textes["resultat"])
     label_timer.config(textvariable=variable_timer)
 
+    # Mettre à jour les instructions
+    text_instructions.config(state=tk.NORMAL)
+    text_instructions.delete(1.0, tk.END)
+    text_instructions.insert(tk.END, textes["instructions"])
+    text_instructions.config(state=tk.DISABLED)
+
 def commencer_enregistrement():
-    global enregistrement_en_cours, enregistrement, thread_recording, timer_thread
+    global enregistrement_en_cours, enregistrement, thread_recording, timer_thread, start_time
     if not enregistrement_en_cours:
         enregistrement_en_cours = True
         label_message.config(text=textes["enregistrement_en_cours"])
@@ -93,6 +103,8 @@ def commencer_enregistrement():
         fichier_audio = os.path.join(dossier_audio, name + ".wav")  # Chemin complet du fichier audio
 
         # Démarrer le thread d'enregistrement
+        start_time = time.time()  # Capturer le temps de début
+        enregistrement = []
         thread_recording = threading.Thread(target=record_audio)
         thread_recording.start()
 
@@ -102,21 +114,34 @@ def commencer_enregistrement():
 
 def record_audio():
     global enregistrement
-    enregistrement = sd.rec(int(180 * 44100), samplerate=44100, channels=2, dtype='float32')
-    while enregistrement_en_cours:
-        sd.sleep(100)  # Attendez un court instant
-    sd.stop()
+    with sd.InputStream(samplerate=44100, channels=2, dtype='float32') as stream:
+        while enregistrement_en_cours:
+            enregistrement.append(stream.read(1024)[0])
+            sd.sleep(10)
+    enregistrement = np.concatenate(enregistrement, axis=0)  # Convertir la liste en tableau NumPy
+
 
 def arreter_enregistrement():
-    global enregistrement_en_cours
+    global enregistrement_en_cours, timer_thread
     if enregistrement_en_cours:
         enregistrement_en_cours = False
         label_message.config(text=textes["arret"])
         bouton_commencer.config(state=tk.NORMAL)
         bouton_arreter.config(state=tk.DISABLED)
-        time.sleep(0.5)  # Attente courte pour s'assurer que l'enregistrement est terminé
-        wavio.write(fichier_audio, enregistrement, 44100, sampwidth=3)  # Sauvegarder l'enregistrement
+
+        # Convertir la liste en un tableau NumPy
+        enregistrement_array = np.concatenate(enregistrement, axis=0)
+
+        duration = time.time() - start_time  # Calculer la durée réelle
+        if duration < 3 * 60:  # Si arrêté manuellement
+            wavio.write(fichier_audio, enregistrement_array[:int(duration * 44100)], 44100, sampwidth=3)
+        else:  # Si arrêté automatiquement après 3 minutes
+            wavio.write(fichier_audio, enregistrement_array, 44100, sampwidth=3)
+
         champ_saisie.delete(0, tk.END)  # Effacer le contenu du champ de saisie
+
+        # Réinitialiser le compte à rebours
+        variable_timer.set(textes["timer_format"].format(3, 0))
 
 def afficher_saisie():
     valeur_saisie = champ_saisie.get()
@@ -134,11 +159,9 @@ def compte_a_rebours(duree):
     if enregistrement_en_cours:  # Arrêter l'enregistrement automatiquement à la fin du compte à rebours
         arreter_enregistrement()
 
-
+# Interface graphique
 fenetre = tk.Tk()
 fenetre.title("Enregistreur Audio")
-
-# Ajuster la taille de la fenêtre
 fenetre.geometry("1000x500")
 
 # Créer un frame pour les widgets de contrôle
@@ -148,6 +171,7 @@ frame_controls.pack(side=tk.LEFT, padx=20, pady=20)
 # Variable pour le statut de l'enregistrement
 enregistrement_en_cours = False
 enregistrement = None
+start_time = None
 
 # Widget Entry pour la saisie de texte
 champ_saisie = tk.Entry(frame_controls, font=('Arial', 16))
@@ -185,11 +209,11 @@ frame_buttons = tk.Frame(frame_instructions)
 frame_buttons.pack(pady=10)
 
 # Charger les images des drapeaux
-image_francais = Image.open("assets\Flag_of_France.svg.png")
+image_francais = Image.open("assets/Flag_of_France.svg.png")
 image_francais = image_francais.resize((50, 30), Image.LANCZOS)
 photo_francais = ImageTk.PhotoImage(image_francais)
 
-image_portugais = Image.open("assets\Flag_of_Portugal.svg.png")
+image_portugais = Image.open("assets/Flag_of_Portugal.svg.png")
 image_portugais = image_portugais.resize((50, 30), Image.LANCZOS)
 photo_portugais = ImageTk.PhotoImage(image_portugais)
 
